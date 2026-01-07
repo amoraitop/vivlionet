@@ -44,28 +44,20 @@ def search_book(title):
             
     return None
 
-def save_url_as_pdf(driver, url, pdf_path):
-    """ Χρησιμοποιεί το Chrome DevTools Protocol για εκτύπωση σε PDF. """
-    driver.get(url)
-    # Αναμονή για φόρτωση της σελίδας
-    time.sleep(2)
-    
-    # Ρυθμίσεις εκτύπωσης
-    print_options = {
-        'landscape': False,
-        'displayHeaderFooter': False,
-        'printBackground': True,
-        'preferCSSPageSize': True,
-    }
-    
-    # Εκτέλεση της εντολής εκτύπωσης μέσω CDP
-    result = driver.execute_cdp_cmd("Page.printToPDF", print_options)
-    
-    with open(pdf_path, "wb") as f:
-        f.write(base64.b64decode(result['data']))
+def save_page_as_txt(driver, txt_path):
+    """ Λαμβάνει το κείμενο της σελίδας και το αποθηκεύει σε TXT. """
+    try:
+        # Λήψη του κειμένου από το body της σελίδας
+        body_text = driver.find_element("tag name", "body").text
+        with open(txt_path, "w", encoding="utf-8") as f:
+            f.write(body_text)
+        return True
+    except Exception as e:
+        print(f"  Σφάλμα κατά την εξαγωγή κειμένου: {e}")
+        return False
 
 def main():
-    print("--- Biblionet URL Finder & Review Extractor ---")
+    print("--- Biblionet URL Finder & Text Extractor (Automatic) ---")
     if len(sys.argv) > 1:
         book_title = " ".join(sys.argv[1:])
     else:
@@ -125,12 +117,12 @@ def main():
             if data_rows:
                 print(f"Αποθηκεύτηκαν {len(data_rows)} εγγραφές στο '{csv_filename}'.")
                 
-                print("\nΛήψη κριτικών ως PDF μέσω Selenium...")
-                pdf_dir = "reviews_pdfs"
-                if not os.path.exists(pdf_dir):
-                    os.makedirs(pdf_dir)
+                print("\nΑυτόματη λήψη περιεχομένου ως TXT μέσω Selenium...")
+                txt_dir = "reviews_txt"
+                if not os.path.exists(txt_dir):
+                    os.makedirs(txt_dir)
 
-                # Ρύθμιση Selenium
+                # Ρύθμιση Selenium (Headless για αυτόματη λειτουργία)
                 chrome_options = Options()
                 chrome_options.add_argument("--headless")
                 chrome_options.add_argument("--disable-gpu")
@@ -147,21 +139,22 @@ def main():
                         if not url: continue
                         
                         safe_name = re.sub(r'[\\/*?:"<>|]', "", author).strip() or "unknown"
-                        pdf_path = os.path.join(pdf_dir, f"{safe_name}.pdf")
+                        txt_path = os.path.join(txt_dir, f"{safe_name}.txt")
                         
                         counter = 1
-                        while os.path.exists(pdf_path):
-                            pdf_path = os.path.join(pdf_dir, f"{safe_name}_{counter}.pdf")
+                        while os.path.exists(txt_path):
+                            txt_path = os.path.join(txt_dir, f"{safe_name}_{counter}.txt")
                             counter += 1
                             
-                        print(f"Δημιουργία PDF για: {author} ({url})")
+                        print(f"Επεξεργασία: {author} ({url})")
                         try:
                             if url.lower().endswith(".pdf"):
-                                r = requests.get(url)
-                                with open(pdf_path, "wb") as f:
-                                    f.write(r.content)
+                                print(f"  Παράλειψη (αρχείο PDF): {url}")
                             else:
-                                save_url_as_pdf(driver, url, pdf_path)
+                                driver.get(url)
+                                time.sleep(2) # Αναμονή για φόρτωση
+                                if save_page_as_txt(driver, txt_path):
+                                    print(f"  Αποθηκεύτηκε: {txt_path}")
                         except Exception as e:
                             print(f"Σφάλμα στο {author}: {e}")
                 finally:
